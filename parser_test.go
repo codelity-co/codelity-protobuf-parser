@@ -1,10 +1,10 @@
 package parser
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"testing"
-	"fmt"
 )
 
 type ProtobufParserTestSuite struct {
@@ -101,7 +101,7 @@ func (suite *ProtobufParserTestSuite) TestMessage() {
 }
 
 func (suite *ProtobufParserTestSuite) TestProcessSyntaxLines() {
-	var err error 
+	var err error
 	t := suite.T()
 
 	parser := &Parser{}
@@ -137,7 +137,7 @@ func (suite *ProtobufParserTestSuite) TestProcessSyntaxLines() {
 }
 
 func (suite *ProtobufParserTestSuite) TestProcessPackageLines() {
-	var err error 
+	var err error
 	t := suite.T()
 
 	parser := &Parser{}
@@ -166,7 +166,7 @@ func (suite *ProtobufParserTestSuite) TestProcessPackageLines() {
 }
 
 func (suite *ProtobufParserTestSuite) TestProcessImportLines() {
-	var err error 
+	var err error
 	t := suite.T()
 
 	parser := &Parser{}
@@ -205,7 +205,7 @@ func (suite *ProtobufParserTestSuite) TestProcessImportLines() {
 }
 
 func (suite *ProtobufParserTestSuite) TestProcessOptionLines() {
-  var err error 
+	var err error
 	t := suite.T()
 
 	parser := &Parser{}
@@ -259,7 +259,7 @@ func (suite *ProtobufParserTestSuite) TestProcessOptionLines() {
 }
 
 func (suite *ProtobufParserTestSuite) TestProcessServiceLines() {
-  var err error 
+	var err error
 	t := suite.T()
 
 	parser := &Parser{}
@@ -309,7 +309,7 @@ func (suite *ProtobufParserTestSuite) TestProcessServiceLines() {
 	err = parser.processServiceLines([]string{`service abc {`, `rpc cde(efg) fgh;`, `}`})
 	assert.NotNil(t, err)
 
-	err = parser.processServiceLines([]string{`service abc {`, `rpc cde(efg) returns (fgh) {`, `option (x) = {`, `xyz: "cde";`, `}`,`}`, `}`})
+	err = parser.processServiceLines([]string{`service abc {`, `rpc cde(efg) returns (fgh) {`, `option (x) = {`, `xyz: "cde";`, `}`, `}`, `}`})
 	assert.NotNil(t, err)
 
 	err = parser.processServiceLines([]string{`service abc {`, `rpc cde(efg) returns (fgh) {};`, `}`})
@@ -345,6 +345,17 @@ func (suite *ProtobufParserTestSuite) TestProcessServiceLines() {
 	assert.Equal(t, "efg", rpcs[0].GetRpcRequestName(), `Cannot get rpc request "efg"`)
 	assert.Equal(t, "fgh", rpcs[0].GetRpcResponseName(), `Cannot get rpc response "fgh"`)
 
+	err = parser.processServiceLines([]string{`service abc {`, `rpc cde(efg) returns (fgh) {`, `option (x) = {`, `xyz: "cde";`, `}`, `};`, `}`})
+	assert.Nil(t, err)
+	services = parser.GetServices()
+	assert.Equal(t, 1, len(services), `Not return single service`)
+	assert.Equal(t, "abc", services[0].GetServiceName(), `Cannot get service name "abc"`)
+	rpcs = services[0].GetRpcs()
+	assert.Equal(t, 1, len(rpcs), "Not return single rpc")
+	assert.Equal(t, "cde", rpcs[0].GetRpcName(), `Cannot get rpc "cde"`)
+	assert.Equal(t, "efg", rpcs[0].GetRpcRequestName(), `Cannot get rpc request "efg"`)
+	assert.Equal(t, "fgh", rpcs[0].GetRpcResponseName(), `Cannot get rpc response "fgh"`)
+
 	err = parser.processServiceLines([]string{`service abc {`, `rpc cde(efg) returns (fgh);`, `}`, `service ghi {`, `rpc hij(ijk) returns jkl;`, `}`})
 	assert.Nil(t, err)
 	services = parser.GetServices()
@@ -361,23 +372,11 @@ func (suite *ProtobufParserTestSuite) TestProcessServiceLines() {
 	assert.Equal(t, "hij", rpcs[0].GetRpcName(), `Cannot get rpc "hij"`)
 	assert.Equal(t, "ijk", rpcs[0].GetRpcRequestName(), `Cannot get rpc request "ijk"`)
 	assert.Equal(t, "jkl", rpcs[0].GetRpcResponseName(), `Cannot get rpc response "jkl"`)
-
-	err = parser.processServiceLines([]string{`service abc {`, `rpc cde(efg) returns (fgh) {`, `option (x) = {`, `xyz: "cde";`, `}`,`};`, `}`})
-	assert.Nil(t, err)
-	services = parser.GetServices()
-	assert.Equal(t, 1, len(services), `Not return single service`)
-	assert.Equal(t, "abc", services[0].GetServiceName(), `Cannot get service name "abc"`)
-	rpcs = services[0].GetRpcs()
-	assert.Equal(t, 1, len(rpcs), "Not return single rpc")
-	assert.Equal(t, "cde", rpcs[0].GetRpcName(), `Cannot get rpc "cde"`)
-	assert.Equal(t, "efg", rpcs[0].GetRpcRequestName(), `Cannot get rpc request "efg"`)
-	assert.Equal(t, "fgh", rpcs[0].GetRpcResponseName(), `Cannot get rpc response "fgh"`)
 }
 
 func (suite *ProtobufParserTestSuite) TestProcessMessageLines() {
 
 }
-
 
 func (suite *ProtobufParserTestSuite) TestParse() {
 	t := suite.T()

@@ -433,16 +433,18 @@ func (p *Parser) processServiceLines(lines []string) error {
 
 	serviceCount := strings.Count(line, "service")
 	serviceLines := make([]string, 0)
+
 	for i := 0; i < serviceCount; i++ {
 		endIndex := strings.Index(line[1:], "service")
 		if endIndex == -1 {
 			serviceLines = append(serviceLines, line)
 		} else {
 			serviceLines = append(serviceLines, line[:endIndex])
-			line = line[endIndex:]
+			line = strings.TrimSpace(line[endIndex:])
 		}
-
 	}
+
+
 
 	for _, serviceLine := range serviceLines {
 
@@ -583,13 +585,6 @@ func (p *Parser) processServiceLines(lines []string) error {
 				request: rpcRequest,
 				response: rpcResponse,
 			}
-
-			fmt.Println("*****BEGIN")
-			fmt.Println(rpcBlock)
-			fmt.Println(rpcName)
-			fmt.Println(rpcRequest)
-			fmt.Println(rpcResponse)
-			fmt.Println("*****END")
 
 			err = service.addRpc(rpc)
 			if err != nil {

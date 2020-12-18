@@ -3,6 +3,8 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"regexp"
 	"strings"
 )
 
@@ -14,16 +16,6 @@ type Parser struct {
 	services    []*Service
 	messages    []*Message
 }
-
-// func init() {
-// 	var err error
-// 	buildConfig := zap.NewProductionConfig()
-// 	logger, err = buildConfig.Build()
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	sugar = logger.Sugar()
-// }
 
 // Parse will accept content as string and translate content into type Parser
 func (p *Parser) Parse(content string) error {
@@ -129,6 +121,15 @@ func (p *Parser) Parse(content string) error {
 }
 
 func (p *Parser) ReadFile(filePath string) error {
+	content, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		panic(err)
+	}
+
+	err = p.Parse(string(content))
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -444,8 +445,6 @@ func (p *Parser) processServiceLines(lines []string) error {
 		}
 	}
 
-
-
 	for _, serviceLine := range serviceLines {
 
 		if len(serviceLine) == 0 {
@@ -599,11 +598,229 @@ func (p *Parser) processServiceLines(lines []string) error {
 	return nil
 }
 
-func (p *Parser) processMessageLines(lines []string) error {
+func (p *Parser) processMessageLines(content []string) error {
 	//nolint: errcheck
 	// defer sugar.Sync()
 
 	// sugar.Debugf("messageLines: %v", lines)
 
+	p.messages = make([]*Message, 0)
+
+	if len(content) == 0 {
+		return nil
+	}
+
+	line := strings.Join(content, " ")
+
+	var tempLine string
+	var lines []string
+	
+	whitespaces := regexp.MustCompile(`\s+`)
+	line = whitespaces.ReplaceAllString(line, " ")
+	
+	for _, token := range strings.Split(line, " ") {
+		if token == "message" && len(tempLine) > 0 {
+			lines = append(lines, tempLine)
+			tempLine = ""
+		}
+		if len(tempLine) == 0 {
+			tempLine = token
+		} else {
+			tempLine = tempLine + " " + token
+		}
+	}
+
+	if len(tempLine) > 0 {
+		lines = append(lines, tempLine)
+	}
+
+	tempLine = ""
+	var messageLines []string
+	for _, line := range lines {
+		if len(tempLine) == 0 {
+			tempLine = line
+		} else {
+			tempLine = tempLine + " " + line
+		}
+		if tempLine[len(tempLine) - 1] == '}' {
+			messageLines = append(messageLines, tempLine)
+			tempLine = ""
+		}
+	}
+
+	if len(tempLine) > 0 {
+		messageLines = append(messageLines, tempLine)
+	}
+
+	for _, messageLine := range messageLines {
+		message, err := p.processMessageLine(messageLine)
+		if err != nil {
+			return err
+		}
+		p.messages = append(p.messages, message)
+	}
+
 	return nil
+}
+
+func (p *Parser) processMessageLine(content string) (*Message, error) {
+	var err error
+
+	mainBlockBeginPos := strings.Index(content, "{")
+	mainBlockEndPos := strings.LastIndex(content, "}")
+
+	if mainBlockBeginPos == -1 {
+		err = fmt.Errorf(`Curse bracket not match: %v`, content)
+		return nil, err
+	}
+
+	if mainBlockEndPos == -1 {
+		err = fmt.Errorf(`Curse bracket not match: %v`, content)
+		return nil, err
+	}
+
+	if content[len(content) - 1 ] == ';' {
+		err = fmt.Errorf(`message ended with semicolon: %v`, content)
+		return nil, err
+	}
+
+  if len(strings.TrimSpace(strings.ReplaceAll(content, "message", ""))) == 0 {
+		err = fmt.Errorf(`empty message: %v`, content)
+		return nil, err
+	}
+
+	messageTokens := strings.Split(strings.TrimSpace(content[:mainBlockBeginPos]), " ")
+	if len(messageTokens) !=  2  {
+		err = fmt.Errorf(`Cannot find message name: %v`, content)
+		return nil, err
+	}
+
+	messageName := messageTokens[1]
+	if len(messageName) ==  0 {
+		err = fmt.Errorf(`Invalid message name: %v`, content)
+		return nil, err
+	}
+
+	message := &Message{name: messageName, fields: make(map[string]interface{})}
+
+	messageContent := content[mainBlockBeginPos + 1:mainBlockEndPos]
+	if len(strings.TrimSpace(messageContent)) == 0 {
+		err = fmt.Errorf(`No rpc defintion: %v`, content)
+		return nil, err
+	}
+
+	fields := make(map[string]interface{})
+  var fieldLine string = ""
+	for _, fieldContent := range strings.Split(messageContent, ";") {
+    fieldContent = strings.TrimSpace(fieldContent)
+		if len(fieldContent) == 0 {
+			continue
+		}
+
+		if len(fieldLine) == 0 {
+			fieldLine = fieldContent
+		} else {
+			//nolint:gosimple
+			if (strings.Index(fieldLine, "message") > -1) && (strings.Index(fieldLine, "}") == -1) {
+				fieldLine = fieldLine + ";" + fieldContent
+			} else {
+				fieldLine = fieldLine + " " + fieldContent
+			}
+		}
+
+		messageBeginPos := strings.Index(fieldLine, "message")
+		messageEndPos := strings.Index(fieldLine, "}")
+
+		if messageBeginPos > -1 && messageEndPos == -1 {
+			continue
+		}
+
+		if messageBeginPos > -1 {
+
+			if messageEndPos < len(fieldLine) -1 {
+
+				nestedMessage, err := p.processMessageLine(fieldLine[messageBeginPos:messageEndPos+1])
+				if err != nil {
+					return nil, err
+				}
+
+				fields[nestedMessage.GetMessageName()] = nestedMessage
+
+				fields, err = p.processFieldLines(fieldLine[:messageBeginPos] + " " + fieldLine[messageEndPos+1:])
+				if err != nil {
+					return nil, err
+				}	
+				fieldLine = ""
+
+			} else if messageEndPos == len(fieldLine) -1 {
+				nestedMessage, err := p.processMessageLine(fieldLine[messageBeginPos:])
+				if err != nil {
+					return nil, err
+				}
+				fields[nestedMessage.GetMessageName()] = nestedMessage
+
+				fields, err = p.processFieldLines(fieldLine[:messageBeginPos])	
+				if err != nil {
+					return nil, err
+				}
+				fieldLine = ""
+			}
+		} else {
+
+			fields, err = p.processFieldLines(fieldLine)
+			if err != nil {
+				return nil, err
+			}
+			fieldLine = ""
+		}
+
+		if len(fields) > 0 {
+			for k, v := range fields {
+				message.fields[k] = v
+			}
+		}
+		
+	}
+
+	return message, nil
+}
+
+func (p *Parser) processFieldLines(content string) (map[string]interface{}, error) {
+	var err error
+	fields := make(map[string]interface{})
+
+	fieldLines := strings.Split(content, ";")
+	
+	if len(fieldLines) == 0 {
+		return fields, nil
+	}
+
+	for _, fieldLine := range fieldLines {
+		fieldLine = strings.TrimSpace(fieldLine)
+		if len(fieldLine) == 0 {
+			continue
+		}
+
+		equalPos := strings.Index(fieldLine, "=")
+		if equalPos == -1 {
+			err = fmt.Errorf(`Cannot find equal sign: %v`, fieldLine)
+			return nil, err
+		}
+		whitespaces := regexp.MustCompile(`\s+`)
+		fieldLine = whitespaces.ReplaceAllString(fieldLine[:equalPos], " ")
+
+		tokens := strings.Split(strings.TrimSpace(fieldLine), " ")
+
+		if len(tokens) < 2 {
+			err = fmt.Errorf(`Field error: %v`, fieldLine)
+			return nil, err
+		}
+
+		if tokens[0] == "optional" || tokens[0] == "required" || tokens[0] == "repeated" {
+			fields[tokens[len(tokens)-1]] = map[string]interface{}{"type": tokens[1:len(tokens)-1][0], "qualifier": tokens[0]}
+		} else {
+			fields[tokens[len(tokens)-1]] = map[string]interface{}{"type": tokens[:len(tokens) -1][0]}
+		}
+	}
+	return fields, nil
 }

@@ -1,7 +1,14 @@
 package parser
 
-type Message struct {}
+type Message struct {
+	name string
+	fields map[string]interface{}
+}
 
-func Parse(lines []string) error {
-	return nil
+func (m *Message) GetMessageName() string {
+	return m.name
+}
+
+func (m *Message) GetFields() map[string]interface{} {
+	return m.fields
 }

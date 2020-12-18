@@ -30,7 +30,7 @@ func (suite *ProtobufParserTestSuite) SetupTest() {
 	}
 
 	message SampleRequest {
-		dummyVarialbe string = 1;
+		string dummyVariable = 1;
 	}
 
 	message SampleResponse {
@@ -43,7 +43,7 @@ func (suite *ProtobufParserTestSuite) SetupTest() {
 			string applicationMessageText = 6;
 		}
 		map<string, google.protobuf.Struct> sampleInfo = 1;
-		ResponseInfo responseInfo = 1;
+		ResponseInfo responseInfo = 2;
 	}
 	`
 }
@@ -375,7 +375,89 @@ func (suite *ProtobufParserTestSuite) TestProcessServiceLines() {
 }
 
 func (suite *ProtobufParserTestSuite) TestProcessMessageLines() {
+	var err error
+	t := suite.T()
 
+	parser := &Parser{}
+
+	err = parser.processMessageLines([]string{`message`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message;`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc;`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {}`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {};`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {`,`field1 = 1`, `};`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {field1: 1};`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {field1= 1;field2=2};`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {field1= 1;};`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {string field1= 1;};`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {string  field1= 1;field2=2;};`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {string  field1= 1;field2=2;}`})
+	assert.NotNil(t, err)
+
+	err = parser.processMessageLines([]string{`message abc {string  field1= 1;string field2=2;}`})
+	assert.Nil(t, err)
+	messages := parser.GetMessages()
+	assert.Equal(t, 1, len(messages), "Number of message is not equal to 1")
+	assert.Equal(t, "abc", messages[0].GetMessageName(), `Cannot find message "abc"`)
+	assert.Equal(t, 2, len(messages[0].GetFields()), "Number of fields is not 2")
+	assert.Equal(t, map[string]interface{}{
+		"field1": map[string]interface{}{
+			"type": "string",
+		}, 
+		"field2": map[string]interface{}{
+			"type": "string",
+		},
+	}, messages[0].GetFields(), "Fields do not match")
+
+	err = parser.processMessageLines([]string{`message abc {string  field1= 1;string field2=2;} message cde { string field1 = 1; string field2 = 2;}`})
+	assert.Nil(t, err)
+	messages = parser.GetMessages()
+	assert.Equal(t, 2, len(messages), "Number of message is not equal to 2")
+	assert.Equal(t, "abc", messages[0].GetMessageName(), `Cannot find message "abc"`)
+	assert.Equal(t, 2, len(messages[0].GetFields()), "Number of fields is not 2")
+	assert.Equal(t, map[string]interface{}{
+		"field1": map[string]interface{}{
+			"type": "string",
+		}, 
+		"field2": map[string]interface{}{
+			"type": "string",
+		},
+	}, messages[0].GetFields(), "Fields do not match")
+	assert.Equal(t, "cde", messages[1].GetMessageName(), `Cannot find message "cde"`)
+	assert.Equal(t, 2, len(messages[1].GetFields()), "Number of fields is not 2")
+	assert.Equal(t, map[string]interface{}{
+		"field1": map[string]interface{}{
+			"type": "string",
+		}, 
+		"field2": map[string]interface{}{
+			"type": "string",
+		},
+	}, messages[1].GetFields(), "Fields do not match")
 }
 
 func (suite *ProtobufParserTestSuite) TestParse() {

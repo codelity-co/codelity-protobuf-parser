@@ -15,35 +15,108 @@ type ProtobufParserTestSuite struct {
 func (suite *ProtobufParserTestSuite) SetupTest() {
 	suite.testProtoContent = `
 	syntax = "proto3";
-	package sample;
-
-	option go_package ".;main";
-
+	package selfregistration_process;
+	
 	import "google/api/annotations.proto";
-
-	service SampleService {
-		rpc SampleAction(SampleRequest) returns (SampleResponse) {
+	import "google/protobuf/struct.proto";
+	
+	option go_package = ".;main";
+	
+	service SelfRegistrationProcessService {
+		rpc CreateUserAccount(CreateUserAccountRequest) returns (CreateUserAccountResponse);
+		rpc GenerateActivationKey(GenerateActivationKeyRequest) returns (GenerateActivationKeyResponse);
+		rpc SendActivationEmail(SendActivationEmailRequest) returns (SendActivationEmailResponse);
+		rpc ReceiveUserAccountActivationMessage(ReceiveUserAccountActivationMessageRequest) returns (ReceiveUserAccountActivationMessageResponse);
+		rpc ActivateUserAccount(ActivateUserAccountRequest) returns (ActivateUserAccountResponse) {
 			option (google.api.http) = {
-				post: "/v1/SampleService/SampleAction";
+				post: "/v1/EchoProcessService/Echo";
 			};
 		};
+		rpc SendWelcomeEmail(SendActivationEmailRequest) returns (SendWelcomeEmailResponse);
+		rpc PurgeExpiredUserAccounts(PurgeExpiredUserAccountsRequest) returns (PurgeExpiredUserAccountsResponse);
 	}
-
-	message SampleRequest {
-		string dummyVariable = 1;
+	
+	message CreateUserAccountRequest {
+		string emailAddress = 1;
+		string firstName = 2;
+		string lastName = 3;
+		string password = 4;
 	}
-
-	message SampleResponse {
-		message ResponseInfo {
-			string responseType = 1;
-			int32 httpStatusCode = 2;
-			string httpStatusText = 3;
-			string applicationMessageType = 4;
-			string applicationMessageCode = 5;
-			string applicationMessageText = 6;
-		}
-		map<string, google.protobuf.Struct> sampleInfo = 1;
-		ResponseInfo responseInfo = 2;
+	
+	message CreateUserAccountResponse {
+		ResponseInfo responseInfo = 1;
+		repeated UserAccountInfo results = 2;
+	}
+	
+	message GenerateActivationKeyRequest {
+		string userId = 1;
+	}
+	
+	message GenerateActivationKeyResponse {
+		ResponseInfo responseInfo = 1;
+		repeated KeyInfo results = 2;
+	}
+	
+	message SendActivationEmailRequest {
+		string emailAddress = 1;
+		string firstName = 2;
+		string activationKey = 3;
+	}
+	
+	message SendActivationEmailResponse {
+		ResponseInfo responseInfo = 1;
+	}
+	
+	message ReceiveUserAccountActivationMessageRequest {
+		map<string, google.protobuf.Struct> inputData = 1;
+	}
+	
+	message ReceiveUserAccountActivationMessageResponse {
+		ResponseInfo responseInfo = 1;
+		repeated KeyInfo results = 2;
+	}
+	
+	message ActivateUserAccountRequest {
+		string activationKey = 1;
+	}
+	
+	message ActivateUserAccountResponse {
+		ResponseInfo responseInfo = 1;
+	}
+	
+	message SendWelcomeEmailRequest {
+		string emailAddress = 1;
+		string firstName = 2;
+	}
+	
+	message SendWelcomeEmailResponse {
+		ResponseInfo responseInfo = 1;
+	}
+	
+	message PurgeExpiredUserAccountsRequest {
+		int32 actvationLimitInMinutes = 1;
+	}
+	
+	message PurgeExpiredUserAccountsResponse {
+		ResponseInfo responseInfo = 1;
+	}
+	
+	message ResponseInfo {
+		string responseType = 1;
+		int32 httpStatusCode = 2;
+		string httpStatusText = 3;
+		string applicationMessageType = 4;
+		string applicationMessageCode = 5;
+		string applicationMessageText = 6;
+	}
+	
+	message UserAccountInfo {
+		string userId = 1;
+		string firstName = 2;
+	}
+	
+	message KeyInfo {
+		string activationKey = 1;
 	}
 	`
 }
@@ -249,11 +322,11 @@ func (suite *ProtobufParserTestSuite) TestProcessOptionLines() {
 	err = parser.processOptionLines([]string{`option "abc" '123';`})
 	assert.NotNil(t, err)
 
-	err = parser.processOptionLines([]string{`option abc "123";`})
+	err = parser.processOptionLines([]string{`option abc = "123";`})
 	assert.Nil(t, err)
 	assert.Equal(t, map[string]string{"abc": "123"}, parser.GetOptions(), "Invalid option statements")
 
-	err = parser.processOptionLines([]string{`option abc '123';`})
+	err = parser.processOptionLines([]string{`option abc = '123';`})
 	assert.Nil(t, err)
 	assert.Equal(t, map[string]string{"abc": "123"}, parser.GetOptions(), "Invalid option statements")
 }
@@ -468,8 +541,8 @@ func (suite *ProtobufParserTestSuite) TestParse() {
 
 	assert.Nil(t, err)
 	assert.Contains(t, []string{"proto3"}, parser.GetSyntax(), `Cannot obtain syntax "proto2" or "proto3"`)
-	assert.Equal(t, "sample", parser.GetPackageName(), `Package name should be "sample"`)
-	assert.Contains(t, parser.GetImports(), "google/api/annotations.proto", "Missing import in parser")
+	assert.Equal(t, "selfregistration_process", parser.GetPackageName(), `Package name should be "sample"`)
+	assert.Equal(t, []string{"google/api/annotations.proto", "google/protobuf/struct.proto"}, parser.GetImports(), "Incorrect import in parser")
 	assert.Equal(t, map[string]string{"go_package": ".;main"}, parser.GetOptions(), "Options parsing error")
 }
 

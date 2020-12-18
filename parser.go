@@ -309,19 +309,19 @@ func (p *Parser) processOptionLines(lines []string) error {
 			return err
 		}
 
-		if doubleQuoteCount > 0 && strings.LastIndex(line, `"`) != (len(tempLine) - 1) {
-			err = fmt.Errorf(`Invalid option statements: %v`, tempLine)
+		if doubleQuoteCount > 0 && strings.LastIndex(tempLine, `"`) != (len(tempLine) - 1) {
+			err = fmt.Errorf(`Invalid option statements (dobule quote): %v`, tempLine)
 			return err
 		}
 
-		if singleQuoteCount > 0 && strings.LastIndex(line, `'`) != (len(tempLine) - 1) {
-			err = fmt.Errorf(`Invalid option statements: %v`, tempLine)
+		if singleQuoteCount > 0 && strings.LastIndex(tempLine, `'`) != (len(tempLine) - 1) {
+			err = fmt.Errorf(`Invalid option statements (single quote): %v`, tempLine)
 			return err
 		}
 
 		tokens := strings.Split(tempLine, ` `)
-		if len(tokens) != 3 {
-			err = fmt.Errorf(`Invalid option statements: %v`, tempLine)
+		if len(tokens) != 4 {
+			err = fmt.Errorf(`Invalid option statements (nubmer of tokens): %v`, tempLine)
 			return err
 		}
 
@@ -331,7 +331,7 @@ func (p *Parser) processOptionLines(lines []string) error {
 			return err
 		}
 
-		optionValue := strings.ReplaceAll(strings.ReplaceAll(tokens[2], `"`, ``), `'`, ``)
+		optionValue := strings.ReplaceAll(strings.ReplaceAll(tokens[3], `"`, ``), `'`, ``)
 		if len(optionValue) == 0 {
 			err = fmt.Errorf(`Invalid option value: %v`, tempLine)
 			return err
@@ -392,12 +392,12 @@ func (p *Parser) processImportLines(lines []string) error {
 			return err
 		}
 
-		if doubleQuoteCount > 0 && strings.LastIndex(line, `"`) != (len(tempLine) - 1) {
+		if doubleQuoteCount > 0 && (strings.LastIndex(tempLine, `"`) != (len(tempLine) - 1)) {
 			err = fmt.Errorf(`Invalid import statements: %v`, tempLine)
 			return err
 		}
 
-		if singleQuoteCount > 0 && strings.LastIndex(line, `'`) != (len(tempLine) - 1) {
+		if singleQuoteCount > 0 && strings.LastIndex(tempLine, `'`) != (len(tempLine) - 1) {
 			err = fmt.Errorf(`Invalid import statements: %v`, tempLine)
 			return err
 		}
